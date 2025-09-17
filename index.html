@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AsiaX Coin Toss</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#38d3f1;--muted:#9aa7b2;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071224 0%, #0b1b2a 100%);color:#e6f0f6}
+    .app{max-width:420px;margin:30px auto;padding:18px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:16px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,0.6);backdrop-filter:blur(6px)}
+    header{display:flex;align-items:center;gap:12px}
+    .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#f8f9fa);
+      display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .logo img{width:100%;height:100%;border-radius:12px;object-fit:cover}
+    .title{font-size:18px;font-weight:700}
+    .subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+    .balance{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+    .bal-left{font-size:13px;color:var(--muted)}
+    .bal-amount{font-weight:700}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+    .input, .select, .btn{width:100%;padding:12px;border-radius:12px;
+      border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+    .bet-row{display:flex;gap:8px;margin-top:12px}
+    .small{font-size:12px;color:var(--muted)}
+    .coin-wrapper{display:flex;justify-content:center;margin-top:18px}
+    .coin{width:160px;height:160px;border-radius:50%;background-size:cover;background-position:center;
+      transform-style:preserve-3d;transition:transform 1s cubic-bezier(.2,.9,.2,1);position:relative}
+    .coin img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+    .flip{animation:flip 1s ease-in-out}
+    @keyframes flip{0%{transform:rotateX(0deg);}50%{transform:rotateX(720deg);}100%{transform:rotateX(1440deg);}}
+    .result{margin-top:12px;text-align:center}
+    .result .text{font-weight:700;font-size:16px}
+    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    .footer{margin-top:18px;display:flex;justify-content:space-between;align-items:center}
+    .connect{padding:10px 12px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),#02f823);
+      color:#000505;font-weight:700}
+    .play{padding:12px;border-radius:12px;border:0;background:#1352ff;color:#000505;font-weight:800;flex:1;margin-left:8px}
+    @media (max-width:380px){.coin{width:132px;height:132px}}
+    .muted{color:var(--muted);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <header>
+        <div class="logo" id="logoButton">
+          <img src="asiax.png" alt="Coin Logo">
+        </div>
+        <div>
+          <div class="title">AsiaX Coin Toss</div>
+          <div class="subtitle">Fast. Simple. Fair</div>
+        </div>
+      </header>
+
+      <div class="balance">
+        <div>
+          <div class="bal-left">Your Balance</div>
+          <div class="bal-amount" id="balance">0 AX</div>
+        </div>
+        <div class="muted">Player: <span id="playerAddr">0x...</span></div>
+      </div>
+
+      <div class="controls">
+        <select id="choice" class="select">
+          <option value="0">Heads</option>
+          <option value="1">Tails</option>
+        </select>
+        <input id="bet" class="input" type="number" min="1" step="0.01" value="1" />
+      </div>
+
+      <div class="bet-row">
+        <div class="muted">Min bet: 1 AX</div>
+        <div style="flex:1"></div>
+        <div class="muted">House fee: 5%</div>
+      </div>
+
+      <div class="coin-wrapper">
+        <div id="coin" class="coin">
+          <img src="RIDHI.png" alt="Coin Image">
+        </div>
+      </div><div class="result">
+        <div class="text" id="resultText">Ready to play</div>
+        <div class="hint">Result will show here.</div>
+      </div>
+
+      <div class="footer">
+        <button id="connectBtn" class="connect">Connect wallet</button>
+        <button id="approveBtn" class="connect" style="background: #fbff00;">Approve</button>
+        <button id="playBtn" class="play">Play</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script>
+    const connectBtn = document.getElementById('connectBtn');
+    const playerAddr = document.getElementById('playerAddr');
+    const balanceEl = document.getElementById('balance');
+    const playBtn = document.getElementById('playBtn');
+    const approveBtn = document.getElementById('approveBtn');
+    const betEl = document.getElementById('bet');
+    const choiceEl = document.getElementById('choice');
+    const resultText = document.getElementById('resultText');
+    const coin = document.getElementById('coin');
+    const logoButton = document.getElementById('logoButton');
+
+    const TOKEN_ADDRESS = "0xFEF338fB8B658FF1C564407322b2237D0FbDf260";
+    const CONTRACT_ADDRESS = "0x9F2258d66FB90e3b5c540db4AccD76a9a4dB2207";
+
+    const ABI = [
+      "event TossResult(address indexed player, uint256 betAmount, bool win, uint256 payout, uint256 random, uint8 choice)",
+      "function toss(uint256 amount, uint8 choice) external",
+      "function withdraw(uint256 amount) external",
+      "function contractBalance() external view returns (uint256)",
+      "function token() external view returns (address)",
+      "function owner() external view returns (address)"
+    ];
+
+    const tokenABI = [
+      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"internalType":"address","name":"_spender","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+      {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Transfer","type":"event"},
+      {"inputs":[{"internalType":"address","name":"_owner","type":"address"},{"internalType":"address","name":"_spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+    ];
+
+    let provider, signer, account, tokenContract, gameContract, decimals = 18;
+
+    async function connectWallet() {
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        account = await signer.getAddress();
+        playerAddr.textContent = account.slice(0,6)+"..."+account.slice(-4);
+
+        tokenContract = new ethers.Contract(TOKEN_ADDRESS, tokenABI, provider);
+        gameContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+        decimals = await tokenContract.decimals();
+        await updateBalance();
+
+        // Listen for results live
+        gameContract.on("TossResult", (player, betAmount, win, payout, random, choice) => {
+          if (player.toLowerCase() === account.toLowerCase()) {
+            const pay = Number(payout) / 10 ** decimals;const side = random.toNumber() === 0 ? 'Heads' : 'Tails';
+            resultText.textContent = win
+              ? `🎉 You WON! Payout: ${pay} AX`
+              : `😞 You LOST. Result: ${side}`;
+            coin.style.transform = random.toNumber() === 0 ? 'rotateX(0deg)' : 'rotateX(180deg)';
+            coin.classList.remove('flip');
+            updateBalance();
+          }
+        });
+
+        // Auto update balance on transfer
+        tokenContract.on("Transfer", (from, to, value) => {
+          if (from.toLowerCase() === account.toLowerCase() || to.toLowerCase() === account.toLowerCase()) {
+            updateBalance();
+          }
+        });
+
+        connectBtn.textContent = "Connected";
+      } else {
+        alert("MetaMask not found!");
+      }
+    }
+
+    async function updateBalance() {
+      if (tokenContract && account) {
+        const bal = await tokenContract.balanceOf(account);
+        balanceEl.textContent = (Number(bal) / 10 ** decimals).toFixed(2) + " AX";
+      }
+    }
+
+    async function approveToken() {
+      if (!signer) { alert("Connect wallet first!"); return; }
+      const maxAmount = ethers.utils.parseUnits("1000000", decimals);
+      const tx = await tokenContract.connect(signer).approve(CONTRACT_ADDRESS, maxAmount);
+      await tx.wait();
+      approveBtn.textContent = "Approved";
+      approveBtn.disabled = true;
+      alert("Token approved! Now you can play.");
+    }
+
+    async function onPlay() {
+      if (!signer) { alert("Connect wallet first!"); return; }
+      const betValue = parseFloat(betEl.value);
+      if (betValue < 1) { alert("Bet must be at least 1 AX."); return; }
+      const amount = ethers.utils.parseUnits(betValue.toString(), decimals);
+      const choice = parseInt(choiceEl.value);
+
+      resultText.textContent = "Tossing...";
+      coin.classList.add('flip');
+
+      const allowance = await tokenContract.allowance(account, CONTRACT_ADDRESS);
+      if (allowance.lt(amount)) {
+        alert("Please approve token first!");
+        return;
+      }
+
+      const tx = await gameContract.connect(signer).toss(amount, choice);
+      await tx.wait();
+    }
+
+    logoButton.addEventListener('click', () => {
+      window.location.href = 'index1.html';
+    });
+
+    connectBtn.addEventListener('click', connectWallet);
+    approveBtn.addEventListener('click', approveToken);
+    playBtn.addEventListener('click', onPlay);
+  </script>
+</body>
+</html>
